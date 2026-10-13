@@ -1,0 +1,10 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+#include "rare.h"
+
+// PSX still keeps these tiles as raw data
+#ifdef VERSION_PC
+u16 g_RedDoorTiles[][8] = {
+    {0x0032, 0x0033, 0x0032, 0x0031, 0x01C8, 0x0266, 0x01C8, 0x01C1},
+    {0x0035, 0x0036, 0x0035, 0x0034, 0x01CB, 0x0269, 0x01CB, 0x01C4},
+};
+#endif

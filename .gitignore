@@ -1,0 +1,18 @@
+# build output
+/build/
+
+# your disc image and the files extracted from it
+/disks/*
+!/disks/README
+
+# data generated from the disc by ./build.sh (tools/sotn-assets)
+/assets/
+src/**/gen/
+
+# written by the game into the directory it runs from
+/bu00/
+/bu10/
+/recordings/
+
+# rust
+/tools/sotn_str/target/
