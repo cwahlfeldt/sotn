@@ -452,7 +452,12 @@ void HandlePlay(void) {
             g_Settings.windowColors[1] = 0;
             g_Settings.windowColors[2] = 8;
             g_Settings.isCloakLiningReversed = 0;
+#ifdef VERSION_PC
+            // new games start in stereo rather than the original's mono
+            g_Settings.isSoundMono = false;
+#else
             g_Settings.isSoundMono = true;
+#endif
             func_800E493C();
             for (i = 0; i < LEN(g_Settings.equipOrderTypes); i++) {
                 g_Settings.equipOrderTypes[i] = i;

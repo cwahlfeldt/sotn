@@ -503,6 +503,10 @@ const char* g_SaveAreaNames[] = {
 };
 
 #ifdef VERSION_PC
+// src/pc/autosave.c: where a save made outside a save room puts Alucard
+void Autosave_OnApply(SaveData* save);
+void Autosave_OnStore(SaveData* save);
+
 // The PSX build encodes its sources in Shift-JIS; PC sources stay UTF-8, so
 // the card title StoreSaveData builds comes out in UTF-8 and its digit
 // arithmetic, which adds to the second byte of a two-byte "０", lands in the
@@ -595,6 +599,17 @@ void StoreSaveData(SaveData* save, s32 block, s32 cardIcon) {
         h.Title[i] = 0;
     }
 
+#if defined(VERSION_PC) && defined(VERSION_US)
+    // The literals below are UTF-8 here, half again as long as the Shift-JIS
+    // the PSX wrote, so a name of more than a few letters ("alucard" too)
+    // overflows h.Title: write the Shift-JIS title instead
+    for (saveNameLen = 7; saveNameLen > 0; saveNameLen--) {
+        if (g_Status.saveName[saveNameLen] != 0x20) {
+            break;
+        }
+    }
+    PcSaveTitle(h.Title, block, saveNameLen, g_RoomCount * 100 / RoomCount);
+#else
 #if defined(VERSION_US)
     strcpy(h.Title, "ＣＡＳＴＬＥＶＡＮＩＡ−");
 #else
@@ -658,8 +673,6 @@ void StoreSaveData(SaveData* save, s32 block, s32 cardIcon) {
         strcat(h.Title, saveTitle);
     }
     strcat(h.Title, "％");
-#if defined(VERSION_PC) && defined(VERSION_US)
-    PcSaveTitle(h.Title, block, saveNameLen, i);
 #endif
 
     GetSavePalette(h.Clut, cardIcon);
@@ -702,6 +715,9 @@ void StoreSaveData(SaveData* save, s32 block, s32 cardIcon) {
     }
 
     dst->rng = g_randomNext;
+#ifdef VERSION_PC
+    Autosave_OnStore(save);
+#endif
 }
 
 s32 ApplySaveData(SaveData* save) {
@@ -745,6 +761,9 @@ s32 ApplySaveData(SaveData* save) {
     }
 
     g_randomNext = savePtr->rng;
+#ifdef VERSION_PC
+    Autosave_OnApply(savePtr);
+#endif
     return 0;
 }
 

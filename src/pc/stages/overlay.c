@@ -4,6 +4,7 @@
 #include "overlay.h"
 #include "../pc.h"
 #include "../spawn_point.h"
+#include "../autosave.h"
 #include "../framedump.h"
 #include <SDL3/SDL.h>
 #include <stdio.h>
@@ -41,7 +42,7 @@ static void MissingStage(const char* name) {
     snprintf(msg, sizeof(msg),
              "The program for the area '%s' (%s.dylib next to the game) is "
              "missing or could not be loaded, so the game cannot go on.\n\n"
-             "Rebuild it with ./build-pc.sh.",
+             "Rebuild it with ./build.sh.",
              name, name);
     ERRORF("%s", msg);
     // scripted test runs have nobody to click the dialog away
@@ -62,6 +63,7 @@ bool LoadStageOverlay(const char* name, Overlay* o) {
         MissingStage(name);
         return false;
     }
+    Autosave_OnStageLoad();
     SpawnPoint_HookOverlay(o);
     return true;
 }

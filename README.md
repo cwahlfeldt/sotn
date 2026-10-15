@@ -1,11 +1,7 @@
 # Castlevania: Symphony of the Night — native macOS build
 
 A native Apple Silicon build of Castlevania: Symphony of the Night (US
-version) from C source. This directory holds only what that build needs. It
-was taken from `~/Code/sotn-decomp-mac` (branch `mac-full`, commit
-`ff22bd307`), which also has the PlayStation matching build, the MIPS
-assembly, the decompilation tools and the port's history and notes
-(`docs/PC_PORT_STATUS.md`).
+version) from C source.
 
 You need your own copy of the game: the build turns data from the disc into
 C, and the game reads the disc's files while it runs.
@@ -57,6 +53,12 @@ here:
 Keyboard: arrows move, X jump, Z / D attack, S back dash, Q / R / E mist,
 bat and wolf forms, Return pause, Backspace map. F4 fullscreen, F5 cycles
 the upscaling filters, Esc quits. A game controller works too.
+
+The game saves itself each time you enter a room, once Alucard is standing
+in his own form: to the memory card slot you loaded from or last saved to,
+or the first free one for a new game. Loading such a save puts you back where
+you were; saves made at save points load in the coffin as usual. Set
+`SOTN_AUTOSAVE=0` to turn it off. New games start with stereo sound.
 
 ## What's here
 

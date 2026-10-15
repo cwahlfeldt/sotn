@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "spawn_point.h"
+#include "dra.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 extern u32 CheckAndDoLevelUp(void);
+void PlaySfx(s16 sfxId);
 
 struct SpawnPoint {
     s16 stageId;
@@ -33,6 +35,7 @@ enum SpawnPointStep {
 
 static enum SpawnPointStep s_Step = SpawnPoint_Off;
 static const struct SpawnPoint* s_Spawn = NULL;
+static s32 s_FacingLeft = -1; // -1: face the middle of the screen
 static void (*s_InitRoomEntities)(s32 layoutId) = NULL;
 
 static const struct SpawnPoint* FindSpawnPoint(const char* name) {
@@ -94,6 +97,12 @@ void SpawnPoint_OnFrame(void) {
         g_GameStep == Play_Default) {
         D_8003C730 = 0;
         s_Step = SpawnPoint_Off;
+        // a stage loaded this way starts silent, the way a save room does
+        // until the player leaves it: play what the stage load would have
+        if (!(D_8003C708.flags & FLAG_UNK_20)) {
+            PlaySfx(g_StagesLba[g_StageId].musicId);
+            stopMusicFlag = false;
+        }
         return;
     }
     if (s_Step != SpawnPoint_PickRoom) {
@@ -132,7 +141,8 @@ static void SpawnPoint_PlacePlayerNow(void) {
     g_PlayerY = y;
     PLAYER.posX.i.hi = (u8)x;
     PLAYER.posY.i.hi = (u8)y;
-    PLAYER.facingLeft = PLAYER.posX.i.hi >= 0x80;
+    PLAYER.facingLeft =
+        s_FacingLeft >= 0 ? s_FacingLeft : PLAYER.posX.i.hi >= 0x80;
 
     D_8009791C.x = g_Tilemap.left + (g_PlayerX >> 8);
     D_8009791C.y = g_Tilemap.top + (g_PlayerY >> 8);
@@ -145,6 +155,17 @@ static void SpawnPoint_PlacePlayerNow(void) {
 static void SpawnPoint_InitRoomEntities(s32 layoutId) {
     SpawnPoint_PlacePlayerNow();
     s_InitRoomEntities(layoutId);
+}
+
+static struct SpawnPoint s_LoadSpawn;
+void SpawnPoint_PlaceAfterLoad(s32 x, s32 y, s32 facingLeft) {
+    s_LoadSpawn.stageId = g_StageId;
+    s_LoadSpawn.x = x;
+    s_LoadSpawn.y = y;
+    s_LoadSpawn.name = "save";
+    s_Spawn = &s_LoadSpawn;
+    s_FacingLeft = facingLeft;
+    s_Step = SpawnPoint_PlacePlayer;
 }
 
 void SpawnPoint_HookOverlay(Overlay* o) {

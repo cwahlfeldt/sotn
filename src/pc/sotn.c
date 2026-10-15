@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "pc.h"
 #include "spawn_point.h"
+#include "autosave.h"
 #include "framedump.h"
 #include "dra.h"
 #include "psyz/log.h"
@@ -123,6 +124,7 @@ s32 func_800EDB58(u8 primType, s32 count);
 static void GameLoopCallback(void) {
     Replay_OnFrame();
     SpawnPoint_OnFrame();
+    Autosave_OnFrame();
     FrameDump_OnFrame();
     WindowOpts_OnFrame();
 }
@@ -132,6 +134,7 @@ bool InitGame(struct InitGameParams* params) {
     g_GameParams = *params;
     Replay_Init(params);
     SpawnPoint_Init(params);
+    Autosave_Init(params);
     Psyz_SetVSyncCb(GameLoopCallback);
     // the music is the CD's audio tracks: use the usual image when no
     // --disk is given (but keep scripted test runs quiet)

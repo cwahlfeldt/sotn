@@ -472,6 +472,7 @@ static struct {
     short rh_l[4], rh_r[4];
     unsigned int phase; // 16.16 fractional position into the input stream
     int cur_abs_sector; // absolute last sector used, for CdlGetlocL
+    int read_wait;      // input frames until the drive reads its next sector
 } xa;
 
 static void xa_reset_stream(void) {
@@ -482,6 +483,7 @@ static void xa_reset_stream(void) {
     memset(xa.rh_l, 0, sizeof(xa.rh_l));
     memset(xa.rh_r, 0, sizeof(xa.rh_r));
     xa.phase = 0;
+    xa.read_wait = 0;
 }
 
 static int xa_sector_matches(unsigned char file, unsigned char channel) {
@@ -555,14 +557,25 @@ static int xa_decode_user_mono_4bit(const unsigned char* user) {
     return frame;
 }
 
+// The drive reads sectors at a fixed pace (75 a second, 150 at double speed)
+// and the filter drops the other files and channels. While none of the
+// sectors read so far is ours, the XA output is silent: skipping ahead to the
+// next matching sector instead plays, after a voice clip, the start of a clip
+// thousands of sectors away that reuses the same file and channel numbers.
+// Returns 1 when a sector was decoded, 2 when the drive has not reached one of
+// ours yet (silence) and 0 at the end of the track.
 static int xa_read_and_decode_sector(void) {
     unsigned char sector[SECTOR_SIZE];
-    while (1) {
+    // input frames (37800 Hz) the drive takes to read one sector
+    const int sector_frames =
+        (CD_mode & CdlModeSpeed) ? 37800 / 150 : 37800 / 75;
+    while (xa.read_wait <= 0) {
         const size_t n = fread(sector, 1, SECTOR_SIZE, track_file);
         if (n != SECTOR_SIZE) {
             return 0; // EOF or short read
         }
         xa.cur_abs_sector++;
+        xa.read_wait += sector_frames;
         const unsigned char file = sector[0x10];
         const unsigned char channel = sector[0x11];
         const unsigned char submode = sector[0x12];
@@ -589,19 +602,27 @@ static int xa_read_and_decode_sector(void) {
         xa.decoded_pos = 0;
         return 1;
     }
+    return 2;
 }
 
 // Pull next 37800 Hz stereo input frame into the Hermite ring buffers.
 // Returns 1 on success, 0 if stream ended.
 static int xa_advance_input(void) {
+    short l = 0;
+    short r = 0;
+    int got = 1;
     if (xa.decoded_pos >= xa.decoded_count) {
-        if (!xa_read_and_decode_sector()) {
+        got = xa_read_and_decode_sector();
+        if (!got) {
             return 0;
         }
     }
-    short l = xa.decoded[xa.decoded_pos * 2 + 0];
-    short r = xa.decoded[xa.decoded_pos * 2 + 1];
-    xa.decoded_pos++;
+    if (got == 1) {
+        l = xa.decoded[xa.decoded_pos * 2 + 0];
+        r = xa.decoded[xa.decoded_pos * 2 + 1];
+        xa.decoded_pos++;
+    }
+    xa.read_wait--;
     xa.rh_l[0] = xa.rh_l[1];
     xa.rh_l[1] = xa.rh_l[2];
     xa.rh_l[2] = xa.rh_l[3];
@@ -638,15 +659,15 @@ static size_t xa_pull_samples(short* buf, size_t max_frames) {
     if (!is_playing || !track_file || !xa.active) {
         goto end;
     }
-    // Prime Hermite ring on first call so we have y0..y2 valid.
-    while (xa.rh_l[3] == 0 && xa.rh_l[2] == 0 && xa.rh_l[1] == 0 &&
-           xa.decoded_pos == 0 && xa.decoded_count == 0) {
+    // Prime Hermite ring on first call so we have y0..y2 valid. Only one
+    // input frame: while the drive has not reached a sector of ours the input
+    // is silence, and waiting here for one would skip the time it takes.
+    if (xa.rh_l[3] == 0 && xa.rh_l[2] == 0 && xa.rh_l[1] == 0 &&
+        xa.decoded_pos == 0 && xa.decoded_count == 0) {
         if (!xa_advance_input()) {
             hit_eof = 1;
             goto end;
         }
-        if (xa.decoded_count > 0)
-            break;
     }
     while (written < max_frames) {
         // Advance input as many times as needed to get phase < 1.0.

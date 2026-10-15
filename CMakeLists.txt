@@ -160,6 +160,7 @@ set(SOURCE_FILES_PC
     src/pc/sotn.c
     src/pc/replay.c
     src/pc/spawn_point.c
+    src/pc/autosave.c
     src/pc/framedump.c
     src/pc/gte_pc.c
     src/pc/window_opts.c
