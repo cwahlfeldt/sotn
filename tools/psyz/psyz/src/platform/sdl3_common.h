@@ -205,6 +205,16 @@ static int interp_subframes = 1;
 static int interp_frame_span = 1;
 static PsyzDitherMode dither_mode = PSYZ_DITHER_AUTO;
 static bool use_driver_vsync = false;
+// Driver VSync is trusted to block once per display refresh. Where it returns
+// sooner (XWayland, on a compositor without fifo-v1, completes Vulkan presents
+// about twice per refresh) the game runs fast and in-between frames reach the
+// screen out of step, so game frames are timed while relying on it, and when
+// they come out clearly short the frame limiter takes over for good.
+#define VSYNC_CHECK_WARMUP 30 // frames ignored after (re)configuring
+#define VSYNC_CHECK_FRAMES 60 // frames averaged per check
+static bool driver_vsync_unreliable = false;
+static int vsync_check_frames = -VSYNC_CHECK_WARMUP;
+static double vsync_check_us = 0.0;
 static PsyzVideoStats gpu_stats = {0};
 
 static unsigned draw_grid_source_width = 1;
@@ -280,6 +290,8 @@ static double GetElapsedMicroseconds(Uint64 start, Uint64 end) {
 
 static void ConfigureVSync(double target_fps) {
     interp_subframes = 1;
+    vsync_check_frames = -VSYNC_CHECK_WARMUP;
+    vsync_check_us = 0.0;
     if (vsync_mode == PSYZ_VSYNC_ON) {
         PlatformBackend_SetDriverVsync(true);
         use_driver_vsync = true;
@@ -296,6 +308,12 @@ static void ConfigureVSync(double target_fps) {
         PlatformBackend_SetDriverVsync(false);
         use_driver_vsync = false;
         INFOF("vsync forced OFF, internal frame limiter disabled");
+        return;
+    }
+    if (driver_vsync_unreliable) {
+        PlatformBackend_SetDriverVsync(false);
+        use_driver_vsync = false;
+        INFOF("driver VSync does not keep time here, use frame limiter");
         return;
     }
 
@@ -449,6 +467,27 @@ static void Sdl3Common_Shutdown(void) {
     SDL_SetAtomicInt(&resume_audio_on_foreground, 0);
 }
 
+// a game frame paced by driver VSync took `frame_us`
+static void CheckDriverVsync(double frame_us) {
+    if (vsync_check_frames++ < 0) {
+        return;
+    }
+    vsync_check_us += frame_us;
+    if (vsync_check_frames < VSYNC_CHECK_FRAMES) {
+        return;
+    }
+    const double average_us = vsync_check_us / vsync_check_frames;
+    vsync_check_frames = 0;
+    vsync_check_us = 0.0;
+    if (average_us >= target_frame_time_us * 0.8) {
+        return;
+    }
+    WARNF("driver VSync paced game frames at %.2f ms instead of %.2f",
+          average_us / 1000.0, target_frame_time_us / 1000.0);
+    driver_vsync_unreliable = true;
+    ConfigureVSync(target_frame_rate);
+}
+
 static void WaitForNextFrame(void) {
     Uint64 current_time = SDL_GetPerformanceCounter();
     double elapsed_us = GetElapsedMicroseconds(last_frame_time, current_time);
@@ -503,6 +542,9 @@ static void WaitForNextFrame(void) {
     gpu_stats.target_frame_time_us = target_frame_time_us;
     gpu_stats.total_frames++;
     gpu_stats.using_driver_vsync = use_driver_vsync;
+    if (use_driver_vsync && vsync_mode == PSYZ_VSYNC_AUTO) {
+        CheckDriverVsync(gpu_stats.last_frame_time_us);
+    }
 
     last_frame_time = frame_end_time;
 }

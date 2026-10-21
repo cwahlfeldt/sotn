@@ -129,7 +129,11 @@ extern u8 D_us_8018067C[];
 extern u8 D_us_80180694[];
 extern u8 D_us_801806A8[];
 extern u8 D_us_801806B0[];
+#ifdef VERSION_PC
+#define D_us_801806B8 (D_us_801806B0 + 8) // see D_us_801806B0
+#else
 extern u8 D_us_801806B8[];
+#endif
 extern u8 D_us_801806D0[];
 #ifndef NON_MATCHING
 INCLUDE_ASM("boss/rbo2/nonmatchings/unk_1B284", func_us_8019B52C);
@@ -2110,6 +2114,20 @@ u8 D_us_80180694[0x14] = {
     0,
 };
 u8 D_us_801806A8[8] = { 2, 0xF, 2, 0x11, 2, 0x12, 0, 0 };
+#ifdef VERSION_PC
+// func_us_8019B52C plays this right after D_us_80180694 without resetting the
+// pose, so it starts at pose 8, past its own end: on PSX that plays the tail of
+// D_us_801806B8, which follows it in the overlay's data. As two globals nothing
+// keeps them adjacent (x86-64 aligns the second one to 16 bytes and pose 8
+// lands in the padding, so Death attacks 47 frames early), so here they are
+// one array.
+u8 D_us_801806B0[8 + 0x18] = {
+    0x10, 0xA,  6, 8,    5, 7,    0xFF, 0,
+    // D_us_801806B8
+    2,    1,    6, 0x13, 7, 0x14, 8,    0x15, 9, 0x16, 6, 0x17,
+    6,    0x18, 7, 0x19, 7, 0x1A, 8,    0x1B, 4, 0x1C, 0xFF, 0,
+};
+#else
 u8 D_us_801806B0[8] = { 0x10, 0xA, 6, 8, 5, 7, 0xFF, 0 };
 u8 D_us_801806B8[0x18] = {
     2,
@@ -2137,6 +2155,7 @@ u8 D_us_801806B8[0x18] = {
     0xFF,
     0,
 };
+#endif
 u8 D_us_801806D0[0x10] = { 4, 2, 4, 0x4A, 4, 0x4B, 4, 0x4C, 4, 0x4D, 4, 0x4E, 0xFF, 0, 0, 0 };
 u8 D_us_801806E0[0x18] = {
     9,

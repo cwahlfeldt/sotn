@@ -10,6 +10,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+// the file name Psyz_ModuleOpen gives an overlay, for messages
+#if defined(__APPLE__)
+#define OVERLAY_EXT ".dylib"
+#elif defined(_WIN32)
+#define OVERLAY_EXT ".dll"
+#else
+#define OVERLAY_EXT ".so"
+#endif
+
 static const char* OverlayPath(const char* name, char* buf, int len) {
     (void)buf;
     (void)len;
@@ -39,11 +48,12 @@ static bool LoadOverlay(PsyzModule* current, const char* name, void* o) {
 static void MissingStage(const char* name) {
     char msg[256];
 
-    snprintf(msg, sizeof(msg),
-             "The program for the area '%s' (%s.dylib next to the game) is "
-             "missing or could not be loaded, so the game cannot go on.\n\n"
-             "Rebuild it with ./build.sh.",
-             name, name);
+    snprintf(
+        msg, sizeof(msg),
+        "The program for the area '%s' (%s" OVERLAY_EXT " next to the game) is "
+        "missing or could not be loaded, so the game cannot go on.\n\n"
+        "Rebuild it with ./build.sh.",
+        name, name);
     ERRORF("%s", msg);
     // scripted test runs have nobody to click the dialog away
     if (!FrameDump_IsScripted()) {
@@ -68,7 +78,7 @@ bool LoadStageOverlay(const char* name, Overlay* o) {
     return true;
 }
 
-// A familiar whose dylib is missing: nothing appears and the game goes on
+// A familiar whose overlay is missing: nothing appears and the game goes on
 static void NoServantInit(InitializeMode mode) {}
 static void NoServantUpdate(Entity* self) { DestroyEntity(self); }
 

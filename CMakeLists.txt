@@ -17,15 +17,14 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
-# On macOS, ASan reports false global-buffer-overflows on Metal buffer maps:
-# address ranges freed by dlclose'd overlays keep their poisoned shadow memory.
-if (APPLE)
-    option(SOTN_ASAN "Build with AddressSanitizer" OFF)
-else()
-    option(SOTN_ASAN "Build with AddressSanitizer" ON)
-endif()
+# Off by default. On macOS, ASan reports false global-buffer-overflows on
+# Metal buffer maps: address ranges freed by dlclose'd overlays keep their
+# poisoned shadow memory. On Linux, its leak checker reports what the system
+# libraries SDL loads (GPU driver, X11) leave allocated at exit and makes the
+# game exit non-zero: run with ASAN_OPTIONS=detect_leaks=0.
+option(SOTN_ASAN "Build with AddressSanitizer" OFF)
 
-if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+if (CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     if (NOT CMAKE_BUILD_TYPE)
         set(CMAKE_BUILD_TYPE Debug)
     endif()
@@ -57,7 +56,7 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror=shift-count-overflow")
 endif()
 
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror=discarded-qualifiers")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror=stringop-overflow")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror=stringop-overread")

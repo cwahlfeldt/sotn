@@ -50,8 +50,14 @@ for shader in psx.vert psx.frag clear.vert clear.frag; do
     rm -f "$shader.spv" "$shader.metal" "$shader.hlsl" "$shader.dxil"
 done
 
-# the pixel-art filters are written in MSL by hand (Metal only: there is no
-# GLSL version yet)
+# the pixel-art filters are written by hand twice, in MSL (Metal) and in GLSL
+# (SPIR-V, Vulkan); there is no DXIL version yet
 for shader in mmpx.vert mmpx.frag xbr.frag; do
-    emit_header "$shader.metal" "$(echo "$shader" | tr . _)" msl
+    name=$(echo "$shader" | tr . _)
+    stage=${shader##*.}
+    emit_header "$shader.metal" "$name" msl
+    glslangValidator -V --target-env vulkan1.0 -S "$stage" \
+        "$shader.glsl" -o "$shader.spv"
+    emit_header "$shader.spv" "$name" spv
+    rm -f "$shader.spv"
 done

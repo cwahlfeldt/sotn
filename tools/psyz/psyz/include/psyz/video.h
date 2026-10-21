@@ -95,13 +95,14 @@ typedef enum {
      * MMPX style-preserving pixel-art magnification (McGuire & Gagiu 2021):
      * the frame is rendered at 1x and doubled by MMPX up to the window size.
      * While it is on the internal resolution is 1x; the one set before comes
-     * back when it is turned off. Metal only for now.
+     * back when it is turned off. Metal and Vulkan only for now.
      */
     PSYZ_FILTER_MMPX,
     /**
      * Hyllian's xBR-lv2: like MMPX on a 1x picture, but it treats close
      * colours as equal and blends along edges, so shaded art gets rounder
-     * and smoother. One pass straight to the window size. Metal only.
+     * and smoother. One pass straight to the window size. Metal and Vulkan
+     * only.
      */
     PSYZ_FILTER_XBR,
 } PsyzFilterMode;

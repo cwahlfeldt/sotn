@@ -4638,16 +4638,4 @@ u8 D_80195EB0[] = {
     0x10,0xCE,0x31,0xD2,0x52,0xD6,0x73,0xDE,0x94,0xE2,0xB5,0xE6,0xD6,0xEA,0x18,0xF3,
 };
 // clang-format on
-
-// BSS state used by the elevator message (resolved via symbol map on PSX).
-s32 D_us_801D6FFC;
-s32 D_us_801D7000;
-s32 D_us_801D7004;
-s32 D_us_801D7008;
-s32 D_us_801D700C;
-s32 D_us_801D7010;
-s32 D_us_801D7014;
-s32 D_us_801D7018;
-s32 D_us_801D701C;
-s32 D_us_801D7020;
 #endif

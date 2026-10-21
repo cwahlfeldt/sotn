@@ -2,18 +2,36 @@
 // included by sdl3_gpu.c. The game renders at 1x; before the blit to the
 // swapchain the display area is copied to a texture of its own and
 // magnified:
-// - MMPX (shaders/mmpx.frag.metal) in 2x passes, as many as fit the window's
-//   height (up to 8x); the blit stretches the rest of the way linearly.
-// - xBR-lv2 (shaders/xbr.frag.metal) in one pass straight to the size the
-//   picture has in the window, 4:3 stretch included; the blit copies it.
+// - MMPX (shaders/mmpx.frag.metal, .glsl) in 2x passes, as many as fit the
+//   window's height (up to 8x); the blit stretches the rest of the way
+//   linearly.
+// - xBR-lv2 (shaders/xbr.frag.metal, .glsl) in one pass straight to the size
+//   the picture has in the window, 4:3 stretch included; the blit copies it.
 
-#if defined(__APPLE__)
+#if defined(_WIN32)
+#define FILTERS_SUPPORTED 0 // the shaders exist in MSL and SPIR-V only
+#elif defined(__APPLE__)
 #include "shaders/mmpx_vert_msl.h"
 #include "shaders/mmpx_frag_msl.h"
 #include "shaders/xbr_frag_msl.h"
+#define mmpx_vert mmpx_vert_msl
+#define mmpx_vert_len mmpx_vert_msl_len
+#define mmpx_frag mmpx_frag_msl
+#define mmpx_frag_len mmpx_frag_msl_len
+#define xbr_frag xbr_frag_msl
+#define xbr_frag_len xbr_frag_msl_len
 #define FILTERS_SUPPORTED 1
 #else
-#define FILTERS_SUPPORTED 0 // the shaders exist in MSL only
+#include "shaders/mmpx_vert_spv.h"
+#include "shaders/mmpx_frag_spv.h"
+#include "shaders/xbr_frag_spv.h"
+#define mmpx_vert mmpx_vert_spv
+#define mmpx_vert_len mmpx_vert_spv_len
+#define mmpx_frag mmpx_frag_spv
+#define mmpx_frag_len mmpx_frag_spv_len
+#define xbr_frag xbr_frag_spv
+#define xbr_frag_len xbr_frag_spv_len
+#define FILTERS_SUPPORTED 1
 #endif
 
 #define MMPX_MAX_PASSES 3
@@ -34,12 +52,11 @@ static bool Filter_Init(PsyzFilterMode mode) {
     if (pipe_filter[mode] || filter_failed[mode]) {
         return pipe_filter[mode] != NULL;
     }
-    const unsigned char* frag = mode == PSYZ_FILTER_XBR ? xbr_frag_msl
-                                                         : mmpx_frag_msl;
-    const unsigned int frag_len = mode == PSYZ_FILTER_XBR ? xbr_frag_msl_len
-                                                           : mmpx_frag_msl_len;
+    const unsigned char* frag = mode == PSYZ_FILTER_XBR ? xbr_frag : mmpx_frag;
+    const unsigned int frag_len =
+        mode == PSYZ_FILTER_XBR ? xbr_frag_len : mmpx_frag_len;
     SDL_GPUShader* vs = CreateShader(
-        mmpx_vert_msl, mmpx_vert_msl_len, SDL_GPU_SHADERSTAGE_VERTEX, 0, 0);
+        mmpx_vert, mmpx_vert_len, SDL_GPU_SHADERSTAGE_VERTEX, 0, 0);
     SDL_GPUShader* fs =
         CreateShader(frag, frag_len, SDL_GPU_SHADERSTAGE_FRAGMENT, 1, 1);
     if (vs && fs) {
@@ -189,7 +206,7 @@ static SDL_GPUTexture* Filter_Run(SDL_GPUCommandBuffer* cmd, SDL_GPUTexture* src
         if (!Filter_EnsureTexture(1, dst.w, dst.h)) {
             return NULL;
         }
-        // Params in xbr.frag.metal
+        // Params in xbr.frag.metal and .glsl
         const struct {
             Sint32 origin[2], size[2];
             float output[2], pad[2];
@@ -203,7 +220,7 @@ static SDL_GPUTexture* Filter_Run(SDL_GPUCommandBuffer* cmd, SDL_GPUTexture* src
             if (!Filter_EnsureTexture(i, w, h)) {
                 return NULL;
             }
-            // Params in mmpx.frag.metal: the source rectangle
+            // Params in mmpx.frag.metal and .glsl: the source rectangle
             const Sint32 params[4] = {0, 0, w / 2, h / 2};
             Filter_Pass(cmd, pipe_filter[PSYZ_FILTER_MMPX], i, w, h, params,
                         sizeof(params));

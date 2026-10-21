@@ -1,6 +1,6 @@
 #!/bin/bash
-# Build (and optionally run) the native macOS port of Castlevania: Symphony
-# of the Night.
+# Build (and optionally run) the native macOS and Linux port of Castlevania:
+# Symphony of the Night.
 #
 # Usage:
 #   ./build.sh                 build into build/
@@ -9,10 +9,16 @@
 #   ./build.sh --assets        regenerate the data generated from the disc
 #                              (needed after editing config/assets.us.yaml)
 #
-# Needs your disc image as disks/sotn.us.cue (+ its .bin tracks), cmake, a C
-# compiler, go and cargo.
+# Needs your disc image as disks/sotn.us.cue (+ its .bin tracks), cmake,
+# clang, go and cargo.
 set -euo pipefail
 cd "$(dirname "$0")"
+
+# The game is built and tested with clang, but cc is GCC on most Linux
+# systems. Only read on the first configure: delete build/ to switch.
+if [[ "$(uname)" == Linux && -z "${CC:-}" ]]; then
+    export CC=clang CXX=clang++
+fi
 
 RUN=0
 ASSETS=0
@@ -51,7 +57,7 @@ echo "== configuring =="
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
 
 echo "== building =="
-cmake --build build -j "$(sysctl -n hw.ncpu)"
+cmake --build build -j "$(getconf _NPROCESSORS_ONLN)"
 
 echo "== built: build/sotn =="
 
