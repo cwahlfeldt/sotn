@@ -1,15 +1,16 @@
 #version 450
 
 // The Modern filter's last pass (sdl3_gpu_filter.h), at the size the picture
-// has in the window: scales the sharpened 1x picture
-// (modern_sharpen.frag.glsl) up keeping its pixels square and crisp, adds the
-// bloom (modern_bloom.frag.glsl) with a soft shoulder instead of clipping,
-// lifts contrast and colour a little and darkens the corners. Both inputs are
+// has in the window: scales ScaleFX's 3x picture (scalefx_pass*.frag.glsl,
+// in the sharpened colours of modern_sharpen.frag.glsl) the rest of the way
+// keeping its subpixels crisp with anti-aliased edges, adds the bloom
+// (modern_bloom.frag.glsl) with a soft shoulder instead of clipping, lifts
+// contrast and colour a little and darkens the corners. Both inputs are
 // sampled with linear filtering.
 //
 // SPIR-V only for now: there is no MSL version yet.
 
-layout(set = 2, binding = 0) uniform sampler2D picture; // sharpened, at 1x
+layout(set = 2, binding = 0) uniform sampler2D picture; // ScaleFX, at 3x
 layout(set = 2, binding = 1) uniform sampler2D bloom;   // linear light
 
 layout(set = 3, binding = 0) uniform Params {

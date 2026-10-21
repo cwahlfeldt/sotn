@@ -8,11 +8,17 @@
 //   the picture has in the window, 4:3 stretch included; the blit copies it.
 // - CRT (shaders/crt.frag.glsl; Vulkan only, there is no MSL version yet)
 //   the same way as xBR: scanlines, bloom and an aperture grille.
-// - Modern (shaders/modern*.frag.glsl; Vulkan only) keeps the original
-//   pixels: it sharpens the 1x picture, blurs its bright parts into a bloom
-//   (two passes into 16-bit float textures) and then, in a last pass at the
-//   window's size, scales the pixels up as crisp blocks, adds the bloom and
+// - Modern (shaders/modern*.frag.glsl, scalefx_pass*.frag.glsl; Vulkan
+//   only) keeps the pixel art's look: it sharpens the 1x picture, smooths its
+//   staircase edges to 3x with ScaleFX (four passes at 1x, one at 3x, using
+//   only the picture's own colours), blurs its bright parts into a bloom
+//   (two passes) and then, in a last pass at the window's size, scales the
+//   3x subpixels the rest of the way as crisp blocks, adds the bloom and
 //   grades the colour.
+// - Modern + CRT (shaders/modern_composite.frag.glsl, modern_crt.frag.glsl;
+//   Vulkan only) puts Modern's picture through NTSC-style composite video
+//   (colour smeared sideways) and then onto a CRT's scanlines and aperture
+//   grille, two more passes at the window's size.
 
 #if defined(_WIN32)
 #define FILTERS_SUPPORTED 0 // the shaders exist in MSL and SPIR-V only
@@ -30,9 +36,23 @@
 #define crt_frag_len 0
 #define modern_sharpen_frag NULL // nor Modern
 #define modern_sharpen_frag_len 0
+#define scalefx_pass0_frag NULL
+#define scalefx_pass0_frag_len 0
+#define scalefx_pass1_frag NULL
+#define scalefx_pass1_frag_len 0
+#define scalefx_pass2_frag NULL
+#define scalefx_pass2_frag_len 0
+#define scalefx_pass3_frag NULL
+#define scalefx_pass3_frag_len 0
+#define scalefx_pass4_frag NULL
+#define scalefx_pass4_frag_len 0
 #define modern_bloom_frag NULL
 #define modern_bloom_frag_len 0
 #define modern_frag NULL
+#define modern_composite_frag NULL
+#define modern_composite_frag_len 0
+#define modern_crt_frag NULL
+#define modern_crt_frag_len 0
 #define modern_frag_len 0
 #define FILTERS_SUPPORTED 1
 #else
@@ -41,8 +61,15 @@
 #include "shaders/xbr_frag_spv.h"
 #include "shaders/crt_frag_spv.h"
 #include "shaders/modern_sharpen_frag_spv.h"
+#include "shaders/scalefx_pass0_frag_spv.h"
+#include "shaders/scalefx_pass1_frag_spv.h"
+#include "shaders/scalefx_pass2_frag_spv.h"
+#include "shaders/scalefx_pass3_frag_spv.h"
+#include "shaders/scalefx_pass4_frag_spv.h"
 #include "shaders/modern_bloom_frag_spv.h"
 #include "shaders/modern_frag_spv.h"
+#include "shaders/modern_composite_frag_spv.h"
+#include "shaders/modern_crt_frag_spv.h"
 #define mmpx_vert mmpx_vert_spv
 #define mmpx_vert_len mmpx_vert_spv_len
 #define mmpx_frag mmpx_frag_spv
@@ -53,37 +80,77 @@
 #define crt_frag_len crt_frag_spv_len
 #define modern_sharpen_frag modern_sharpen_frag_spv
 #define modern_sharpen_frag_len modern_sharpen_frag_spv_len
+#define scalefx_pass0_frag scalefx_pass0_frag_spv
+#define scalefx_pass0_frag_len scalefx_pass0_frag_spv_len
+#define scalefx_pass1_frag scalefx_pass1_frag_spv
+#define scalefx_pass1_frag_len scalefx_pass1_frag_spv_len
+#define scalefx_pass2_frag scalefx_pass2_frag_spv
+#define scalefx_pass2_frag_len scalefx_pass2_frag_spv_len
+#define scalefx_pass3_frag scalefx_pass3_frag_spv
+#define scalefx_pass3_frag_len scalefx_pass3_frag_spv_len
+#define scalefx_pass4_frag scalefx_pass4_frag_spv
+#define scalefx_pass4_frag_len scalefx_pass4_frag_spv_len
 #define modern_bloom_frag modern_bloom_frag_spv
 #define modern_bloom_frag_len modern_bloom_frag_spv_len
 #define modern_frag modern_frag_spv
+#define modern_composite_frag modern_composite_frag_spv
+#define modern_composite_frag_len modern_composite_frag_spv_len
+#define modern_crt_frag modern_crt_frag_spv
+#define modern_crt_frag_len modern_crt_frag_spv_len
 #define modern_frag_len modern_frag_spv_len
 #define FILTERS_SUPPORTED 1
 #endif
 
 #define MMPX_MAX_PASSES 3
+#define FILTER_MAX_PASSES 4 // Modern + CRT
 #define FILTER_FORMAT SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM
-#define BLOOM_FORMAT SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT
+#define FLOAT_FORMAT SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT
 
 static PsyzFilterMode filter_mode = PSYZ_FILTER_NONE;
 // the internal resolution asked for while a filter keeps it at 1x
 static unsigned filter_saved_res = 1;
 // by PsyzFilterMode
 static const char* const filter_names[] = {
-    "none", "MMPX", "xBR", "CRT", "Modern"};
+    "none", "MMPX", "xBR", "CRT", "Modern", "Modern + CRT"};
 static SDL_GPUGraphicsPipeline* pipe_filter[LEN(filter_names)];
 static bool filter_failed[LEN(filter_names)];
 // [0]: a copy of the 1x input, [i]: the result of pass i
-static SDL_GPUTexture* filter_tex[MMPX_MAX_PASSES + 1];
-static Posi filter_tex_size[MMPX_MAX_PASSES + 1];
-static Posi filter_pass_size[MMPX_MAX_PASSES + 1]; // of the last Filter_Run
+static SDL_GPUTexture* filter_tex[FILTER_MAX_PASSES + 1];
+static Posi filter_tex_size[FILTER_MAX_PASSES + 1];
+static Posi filter_pass_size[FILTER_MAX_PASSES + 1]; // of the last Filter_Run
 static int filter_last_passes = 0;
-// Modern: its sharpening and bloom passes (horizontal then vertical), at the
-// 1x size
-static SDL_GPUGraphicsPipeline* pipe_sharpen;
-static SDL_GPUGraphicsPipeline* pipe_bloom;
-static SDL_GPUTexture* bloom_tex[2];
-static Posi bloom_tex_size[2];
+// Modern's passes before its last one (pipe_filter[PSYZ_FILTER_MODERN])
+enum {
+    MP_SHARPEN,
+    MP_SFX0, // ScaleFX: colour metric
+    MP_SFX1, // corner strengths
+    MP_SFX2, // junctions
+    MP_SFX3, // edge levels
+    MP_SFX4, // the 3x subpixels, into filter_tex[1]
+    MP_BLOOM,
+    MP_COUNT
+};
+static SDL_GPUGraphicsPipeline* pipe_modern[MP_COUNT];
+// the 1x textures they draw, and their formats
+enum {
+    MT_SHARP,
+    MT_SFX0,
+    MT_SFX1,
+    MT_SFX2,
+    MT_SFX3,
+    MT_BLOOM_H,
+    MT_BLOOM_V,
+    MT_COUNT
+};
+static const SDL_GPUTextureFormat modern_tex_format[MT_COUNT] = {
+    FILTER_FORMAT, FLOAT_FORMAT, FLOAT_FORMAT, FILTER_FORMAT,
+    FILTER_FORMAT, FLOAT_FORMAT, FLOAT_FORMAT,
+};
+static SDL_GPUTexture* modern_tex[MT_COUNT];
+static Posi modern_tex_size[MT_COUNT];
 static SDL_GPUSampler* linear_sampler; // for Modern's last pass
+// Modern + CRT's composite pass, before its last one
+static SDL_GPUGraphicsPipeline* pipe_composite;
 
 // a full-screen pass drawing `format` with `frag`, which samples n_samplers
 // textures; NULL when `frag` is (no version for this backend) or on errors
@@ -130,14 +197,39 @@ static bool Filter_Init(PsyzFilterMode mode) {
         return pipe_filter[mode] != NULL;
     }
     if (mode == PSYZ_FILTER_MODERN) {
-        // sharpening, the bloom passes and the last one (pipe_filter[mode])
-        pipe_sharpen = Filter_CreatePipeline(
-            modern_sharpen_frag, modern_sharpen_frag_len, 1, FILTER_FORMAT);
-        if (pipe_sharpen) {
-            pipe_bloom = Filter_CreatePipeline(
-                modern_bloom_frag, modern_bloom_frag_len, 1, BLOOM_FORMAT);
+        // the passes before the last one (pipe_filter[mode]): their shader,
+        // how many textures it samples and the format it draws
+        const struct {
+            const unsigned char* frag;
+            unsigned int len;
+            Uint32 n_samplers;
+            SDL_GPUTextureFormat format;
+        } passes[MP_COUNT] = {
+            [MP_SHARPEN] = {modern_sharpen_frag, modern_sharpen_frag_len, 1,
+                            FILTER_FORMAT},
+            [MP_SFX0] = {scalefx_pass0_frag, scalefx_pass0_frag_len, 1,
+                         FLOAT_FORMAT},
+            [MP_SFX1] = {scalefx_pass1_frag, scalefx_pass1_frag_len, 1,
+                         FLOAT_FORMAT},
+            [MP_SFX2] = {scalefx_pass2_frag, scalefx_pass2_frag_len, 2,
+                         FILTER_FORMAT},
+            [MP_SFX3] = {scalefx_pass3_frag, scalefx_pass3_frag_len, 1,
+                         FILTER_FORMAT},
+            [MP_SFX4] = {scalefx_pass4_frag, scalefx_pass4_frag_len, 2,
+                         FILTER_FORMAT},
+            [MP_BLOOM] = {modern_bloom_frag, modern_bloom_frag_len, 1,
+                          FLOAT_FORMAT},
+        };
+        bool ok = true;
+        for (int i = 0; i < MP_COUNT && ok; i++) {
+            if (!pipe_modern[i]) {
+                pipe_modern[i] = Filter_CreatePipeline(
+                    passes[i].frag, passes[i].len, passes[i].n_samplers,
+                    passes[i].format);
+            }
+            ok = pipe_modern[i] != NULL;
         }
-        if (pipe_bloom && !linear_sampler) {
+        if (ok && !linear_sampler) {
             const SDL_GPUSamplerCreateInfo info = {
                 .min_filter = SDL_GPU_FILTER_LINEAR,
                 .mag_filter = SDL_GPU_FILTER_LINEAR,
@@ -151,9 +243,20 @@ static bool Filter_Init(PsyzFilterMode mode) {
                 ERRORF("SDL_CreateGPUSampler: %s", SDL_GetError());
             }
         }
-        if (pipe_bloom && linear_sampler) {
+        if (ok && linear_sampler) {
             pipe_filter[mode] = Filter_CreatePipeline(
                 modern_frag, modern_frag_len, 2, FILTER_FORMAT);
+        }
+    } else if (mode == PSYZ_FILTER_MODERN_CRT) {
+        // Modern, then the composite pass and the last one (pipe_filter[mode])
+        if (Filter_Init(PSYZ_FILTER_MODERN) && !pipe_composite) {
+            pipe_composite = Filter_CreatePipeline(
+                modern_composite_frag, modern_composite_frag_len, 1,
+                FILTER_FORMAT);
+        }
+        if (pipe_composite) {
+            pipe_filter[mode] = Filter_CreatePipeline(
+                modern_crt_frag, modern_crt_frag_len, 1, FILTER_FORMAT);
         }
     } else {
         const unsigned char* frag =
@@ -186,28 +289,30 @@ static void Filter_Release(void) {
         }
         filter_failed[i] = false;
     }
-    if (pipe_sharpen) {
-        SDL_ReleaseGPUGraphicsPipeline(device, pipe_sharpen);
-        pipe_sharpen = NULL;
+    for (int i = 0; i < MP_COUNT; i++) {
+        if (pipe_modern[i]) {
+            SDL_ReleaseGPUGraphicsPipeline(device, pipe_modern[i]);
+            pipe_modern[i] = NULL;
+        }
     }
-    if (pipe_bloom) {
-        SDL_ReleaseGPUGraphicsPipeline(device, pipe_bloom);
-        pipe_bloom = NULL;
+    if (pipe_composite) {
+        SDL_ReleaseGPUGraphicsPipeline(device, pipe_composite);
+        pipe_composite = NULL;
     }
     if (linear_sampler) {
         SDL_ReleaseGPUSampler(device, linear_sampler);
         linear_sampler = NULL;
     }
-    for (int i = 0; i <= MMPX_MAX_PASSES; i++) {
+    for (int i = 0; i < LEN(filter_tex); i++) {
         if (filter_tex[i]) {
             SDL_ReleaseGPUTexture(device, filter_tex[i]);
             filter_tex[i] = NULL;
         }
     }
-    for (int i = 0; i < LEN(bloom_tex); i++) {
-        if (bloom_tex[i]) {
-            SDL_ReleaseGPUTexture(device, bloom_tex[i]);
-            bloom_tex[i] = NULL;
+    for (int i = 0; i < MT_COUNT; i++) {
+        if (modern_tex[i]) {
+            SDL_ReleaseGPUTexture(device, modern_tex[i]);
+            modern_tex[i] = NULL;
         }
     }
     filter_last_passes = 0;
@@ -299,51 +404,108 @@ static void Filter_Pass(SDL_GPUCommandBuffer* cmd,
     filter_pass_size[i] = (Posi){w, h};
 }
 
-// Modern from the 1x picture in filter_tex[0] (`src` sized): sharpened into
-// filter_tex[1], its bloom, then the last pass into filter_tex[2]
+// draw modern_tex[target] (1x, `src` sized) with Modern's pass `pass`
+static void Modern_Draw(SDL_GPUCommandBuffer* cmd, int pass, int target,
+                        Posi src, SDL_GPUTexture* const* inputs, int n_inputs,
+                        const void* params, Uint32 params_size) {
+    Filter_Draw(cmd, pipe_modern[pass], modern_tex[target], src.x, src.y,
+                inputs, n_inputs, vram_sampler, params, params_size);
+}
+
+// Modern from the 1x picture in filter_tex[0] (`src` sized): sharpened,
+// smoothed to 3x by ScaleFX into filter_tex[1], its bloom, then the last
+// pass into filter_tex[2]
 static bool Modern_Run(SDL_GPUCommandBuffer* cmd, Posi src, SDL_Rect dst) {
-    if (!Filter_EnsureTexture(1, src.x, src.y) ||
+    const Posi up = {src.x * 3, src.y * 3};
+    if (!Filter_EnsureTexture(1, up.x, up.y) ||
         !Filter_EnsureTexture(2, dst.w, dst.h)) {
         return false;
     }
-    for (int i = 0; i < LEN(bloom_tex); i++) {
-        if (!EnsureTexture(&bloom_tex[i], &bloom_tex_size[i], src.x, src.y,
-                           BLOOM_FORMAT)) {
+    for (int i = 0; i < MT_COUNT; i++) {
+        if (!EnsureTexture(&modern_tex[i], &modern_tex_size[i], src.x, src.y,
+                           modern_tex_format[i])) {
             return false;
         }
     }
-    // Params in modern_sharpen.frag.glsl
-    const Sint32 sharpen[4] = {src.x, src.y};
-    Filter_Pass(cmd, pipe_sharpen, 1, src.x, src.y, sharpen, sizeof(sharpen));
+    // Params in modern_sharpen.frag.glsl and scalefx_pass*.frag.glsl: the
+    // picture's size
+    const Sint32 size[4] = {src.x, src.y};
+    Modern_Draw(
+        cmd, MP_SHARPEN, MT_SHARP, src, &filter_tex[0], 1, size, sizeof(size));
+    // ScaleFX finds the edges in the original pixels; its 3x subpixels then
+    // take the sharpened colours
+    Modern_Draw(
+        cmd, MP_SFX0, MT_SFX0, src, &filter_tex[0], 1, size, sizeof(size));
+    Modern_Draw(cmd, MP_SFX1, MT_SFX1, src, &modern_tex[MT_SFX0], 1, size,
+                sizeof(size));
+    SDL_GPUTexture* const sfx2_inputs[2] = {
+        modern_tex[MT_SFX1], modern_tex[MT_SFX0]};
+    Modern_Draw(cmd, MP_SFX2, MT_SFX2, src, sfx2_inputs, 2, size, sizeof(size));
+    Modern_Draw(cmd, MP_SFX3, MT_SFX3, src, &modern_tex[MT_SFX2], 1, size,
+                sizeof(size));
+    SDL_GPUTexture* const sfx4_inputs[2] = {
+        modern_tex[MT_SFX3], modern_tex[MT_SHARP]};
+    Filter_Draw(cmd, pipe_modern[MP_SFX4], filter_tex[1], up.x, up.y,
+                sfx4_inputs, 2, vram_sampler, size, sizeof(size));
+    filter_pass_size[1] = up;
     // Params in modern_bloom.frag.glsl
     struct {
         Sint32 size[2], dir[2], bright_pass, pad[3];
     } bloom = {{src.x, src.y}, {1, 0}, 1};
-    Filter_Draw(cmd, pipe_bloom, bloom_tex[0], src.x, src.y, &filter_tex[0], 1,
-                vram_sampler, &bloom, sizeof(bloom));
+    Modern_Draw(cmd, MP_BLOOM, MT_BLOOM_H, src, &filter_tex[0], 1, &bloom,
+                sizeof(bloom));
     bloom.dir[0] = 0;
     bloom.dir[1] = 1;
     bloom.bright_pass = 0;
-    Filter_Draw(cmd, pipe_bloom, bloom_tex[1], src.x, src.y, &bloom_tex[0], 1,
-                vram_sampler, &bloom, sizeof(bloom));
-    // Params in modern.frag.glsl: the sizes of the output, of the sharpened
+    Modern_Draw(cmd, MP_BLOOM, MT_BLOOM_V, src, &modern_tex[MT_BLOOM_H], 1,
+                &bloom, sizeof(bloom));
+    // Params in modern.frag.glsl: the sizes of the output, of ScaleFX's
     // picture and its texture, and of the bloom and its texture
     const float params[12] = {
         (float)dst.w,
         (float)dst.h,
-        (float)src.x,
-        (float)src.y,
+        (float)up.x,
+        (float)up.y,
         (float)filter_tex_size[1].x,
         (float)filter_tex_size[1].y,
         (float)src.x,
         (float)src.y,
-        (float)bloom_tex_size[1].x,
-        (float)bloom_tex_size[1].y,
+        (float)modern_tex_size[MT_BLOOM_V].x,
+        (float)modern_tex_size[MT_BLOOM_V].y,
     };
-    SDL_GPUTexture* const inputs[2] = {filter_tex[1], bloom_tex[1]};
+    SDL_GPUTexture* const inputs[2] = {filter_tex[1], modern_tex[MT_BLOOM_V]};
     Filter_Draw(cmd, pipe_filter[PSYZ_FILTER_MODERN], filter_tex[2], dst.w,
                 dst.h, inputs, 2, linear_sampler, params, sizeof(params));
     filter_pass_size[2] = (Posi){dst.w, dst.h};
+    return true;
+}
+
+// Modern + CRT once Modern has drawn filter_tex[2]: composite video into
+// filter_tex[3], then the CRT into filter_tex[4]
+static bool ModernCrt_Run(SDL_GPUCommandBuffer* cmd, Posi src, SDL_Rect dst) {
+    if (!Filter_EnsureTexture(3, dst.w, dst.h) ||
+        !Filter_EnsureTexture(4, dst.w, dst.h)) {
+        return false;
+    }
+    // Params in modern_composite.frag.glsl and modern_crt.frag.glsl: the
+    // output's size, the 1x picture's, and the input's texture size
+    float params[8] = {
+        (float)dst.w,
+        (float)dst.h,
+        (float)src.x,
+        (float)src.y,
+        (float)filter_tex_size[2].x,
+        (float)filter_tex_size[2].y,
+    };
+    Filter_Draw(cmd, pipe_composite, filter_tex[3], dst.w, dst.h,
+                &filter_tex[2], 1, linear_sampler, params, sizeof(params));
+    filter_pass_size[3] = (Posi){dst.w, dst.h};
+    params[4] = (float)filter_tex_size[3].x;
+    params[5] = (float)filter_tex_size[3].y;
+    Filter_Draw(
+        cmd, pipe_filter[PSYZ_FILTER_MODERN_CRT], filter_tex[4], dst.w, dst.h,
+        &filter_tex[3], 1, linear_sampler, params, sizeof(params));
+    filter_pass_size[4] = (Posi){dst.w, dst.h};
     return true;
 }
 
@@ -359,9 +521,11 @@ static SDL_GPUTexture* Filter_Run(SDL_GPUCommandBuffer* cmd, SDL_GPUTexture* src
     // xBR and CRT draw straight to the size the picture has in the window
     const bool one_pass =
         filter_mode == PSYZ_FILTER_XBR || filter_mode == PSYZ_FILTER_CRT;
-    const int passes = filter_mode == PSYZ_FILTER_MODERN ? 2
-                       : one_pass ? 1
-                                  : Mmpx_Passes((Posi){rect.w, rect.h}, dst);
+    const int passes =
+        filter_mode == PSYZ_FILTER_MODERN_CRT ? 4
+        : filter_mode == PSYZ_FILTER_MODERN   ? 2
+        : one_pass ? 1
+                   : Mmpx_Passes((Posi){rect.w, rect.h}, dst);
     if (!passes || !Filter_EnsureTexture(0, rect.w, rect.h)) {
         return NULL;
     }
@@ -375,8 +539,12 @@ static SDL_GPUTexture* Filter_Run(SDL_GPUCommandBuffer* cmd, SDL_GPUTexture* src
     SDL_EndGPUCopyPass(copy);
     filter_pass_size[0] = (Posi){rect.w, rect.h};
 
-    if (filter_mode == PSYZ_FILTER_MODERN) {
-        if (!Modern_Run(cmd, (Posi){rect.w, rect.h}, dst)) {
+    if (filter_mode == PSYZ_FILTER_MODERN ||
+        filter_mode == PSYZ_FILTER_MODERN_CRT) {
+        const Posi size = {rect.w, rect.h};
+        if (!Modern_Run(cmd, size, dst) ||
+            (filter_mode == PSYZ_FILTER_MODERN_CRT &&
+             !ModernCrt_Run(cmd, size, dst))) {
             return NULL;
         }
         *blit_filter = SDL_GPU_FILTER_NEAREST; // already the window's size

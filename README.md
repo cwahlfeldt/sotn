@@ -89,13 +89,15 @@ here:
 ./build/sotn --filter xbr --fullscreen
 ./build/sotn --filter crt
 ./build/sotn --filter modern
+./build/sotn --filter modern-crt
 ```
 
 Keyboard: arrows move, X jump, Z / D attack, S back dash, Q / R / E mist,
 bat and wolf forms, Return pause, Backspace map. F4 fullscreen, F5 cycles
-the filters (MMPX and xBR upscaling, a CRT look with scanlines, and Modern:
-the original pixels, crisp and sharpened, with glowing lights and richer
-colour; CRT and Modern are Linux only for now), Esc quits. A game controller
+the filters (MMPX and xBR upscaling; a CRT look with scanlines; Modern: the
+pixel art sharpened, its edges smoothed by ScaleFX, with glowing lights and
+richer colour; and Modern + CRT: Modern through composite video onto a CRT.
+CRT and the Modern ones are Linux only for now), Esc quits. A game controller
 works too.
 
 On a display refreshing at a multiple of 60 Hz (120 or 240 Hz), the game

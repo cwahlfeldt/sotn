@@ -112,12 +112,19 @@ typedef enum {
      */
     PSYZ_FILTER_CRT,
     /**
-     * A remastered look that keeps the original pixels: their detail
-     * sharpened, scaled up as crisp, even blocks, with a soft glow around
-     * lights, a little more contrast and colour, and slightly darker corners.
-     * Vulkan only for now.
+     * A remastered look that keeps the pixel art's style: its detail
+     * sharpened, its staircase edges smoothed by ScaleFX (using only the
+     * picture's own colours), scaled up as crisp, even blocks, with a soft
+     * glow around lights, a little more contrast and colour, and slightly
+     * darker corners. Vulkan only for now.
      */
     PSYZ_FILTER_MODERN,
+    /**
+     * MODERN through NTSC-style composite video (colour smeared sideways,
+     * dithering blended) and onto a flat CRT's scanlines and aperture grille.
+     * Vulkan only for now.
+     */
+    PSYZ_FILTER_MODERN_CRT,
 } PsyzFilterMode;
 
 typedef struct {
@@ -145,7 +152,7 @@ int Psyz_VideoSetVsyncMode(PsyzVsyncMode mode);
 
 /**
  * @brief Set the output filter (default: NONE); F5 cycles NONE, MMPX, XBR,
- * CRT, MODERN
+ * CRT, MODERN, MODERN_CRT
  *
  * @return 0 on success, -1 if the backend does not support it
  */

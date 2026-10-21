@@ -76,7 +76,8 @@ static void printHelp(void) {
     printf("  --fullscreen       start in fullscreen (F4 toggles)\n");
     printf("  --filter <name>    output filter: mmpx or xbr (pixel-art "
            "upscaling), crt,\n"
-           "                     modern, or none (default). F5 cycles them\n");
+           "                     modern, modern-crt, or none (default). F5 "
+           "cycles them\n");
     printf("  --no-crop          keep the black bars above and below the "
            "picture (4:3)\n");
     printf("  --no-interp        on a 120 Hz display, show each game frame "
@@ -95,8 +96,8 @@ static void printAllowedParams(const char* allowedValues[], int n) {
     }
     printf("%s\n", allowedValues[i - 1]);
 }
-// "mmpx", "xbr", "crt", "modern" or "none" as a PsyzFilterMode, -1 for
-// anything else
+// "mmpx", "xbr", "crt", "modern", "modern-crt" or "none" as a PsyzFilterMode,
+// -1 for anything else
 static int ParseFilter(const char* name) {
     if (!name || !strcmp(name, "none")) {
         return PSYZ_FILTER_NONE;
@@ -112,6 +113,9 @@ static int ParseFilter(const char* name) {
     }
     if (!strcmp(name, "modern")) {
         return PSYZ_FILTER_MODERN;
+    }
+    if (!strcmp(name, "modern-crt")) {
+        return PSYZ_FILTER_MODERN_CRT;
     }
     return -1;
 }
@@ -216,7 +220,7 @@ static bool parseArgs(
             outParams->filter = ParseFilter(argv[++i]);
             if (outParams->filter < 0) {
                 printf("filter '%s' is not recognized: mmpx, xbr, crt, "
-                       "modern, none\n",
+                       "modern, modern-crt, none\n",
                        argv[i]);
                 return false;
             }

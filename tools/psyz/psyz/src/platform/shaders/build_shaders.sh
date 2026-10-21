@@ -63,7 +63,10 @@ for shader in mmpx.vert mmpx.frag xbr.frag; do
 done
 
 # the CRT and Modern filters exist in GLSL only (no MSL version yet)
-for shader in crt.frag modern_sharpen.frag modern_bloom.frag modern.frag; do
+for shader in crt.frag modern_sharpen.frag scalefx_pass0.frag \
+    scalefx_pass1.frag scalefx_pass2.frag scalefx_pass3.frag \
+    scalefx_pass4.frag modern_bloom.frag modern.frag modern_composite.frag \
+    modern_crt.frag; do
     name=$(echo "$shader" | tr . _)
     glslangValidator -V --target-env vulkan1.0 -S frag "$shader.glsl" \
         -o "$shader.spv"
