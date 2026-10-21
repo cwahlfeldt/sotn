@@ -87,11 +87,16 @@ here:
 ./build/sotn
 ./build/sotn --window 1280x960 --scale 3
 ./build/sotn --filter xbr --fullscreen
+./build/sotn --filter crt
+./build/sotn --filter modern
 ```
 
 Keyboard: arrows move, X jump, Z / D attack, S back dash, Q / R / E mist,
 bat and wolf forms, Return pause, Backspace map. F4 fullscreen, F5 cycles
-the upscaling filters (MMPX and xBR), Esc quits. A game controller works too.
+the filters (MMPX and xBR upscaling, a CRT look with scanlines, and Modern:
+the original pixels, crisp and sharpened, with glowing lights and richer
+colour; CRT and Modern are Linux only for now), Esc quits. A game controller
+works too.
 
 On a display refreshing at a multiple of 60 Hz (120 or 240 Hz), the game
 draws in-between frames so motion looks smoother (`--no-interp` turns that

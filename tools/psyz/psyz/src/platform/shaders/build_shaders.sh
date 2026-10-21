@@ -61,3 +61,12 @@ for shader in mmpx.vert mmpx.frag xbr.frag; do
     emit_header "$shader.spv" "$name" spv
     rm -f "$shader.spv"
 done
+
+# the CRT and Modern filters exist in GLSL only (no MSL version yet)
+for shader in crt.frag modern_sharpen.frag modern_bloom.frag modern.frag; do
+    name=$(echo "$shader" | tr . _)
+    glslangValidator -V --target-env vulkan1.0 -S frag "$shader.glsl" \
+        -o "$shader.spv"
+    emit_header "$shader.spv" "$name" spv
+    rm -f "$shader.spv"
+done

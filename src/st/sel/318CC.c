@@ -4,6 +4,9 @@
 extern RECT D_801825A4;
 extern RECT D_80182584;
 extern char* D_801BC398[0x10];
+#ifdef VERSION_PC
+u16 PcUtf8ToSjis(const u8** str);
+#endif
 
 // BSS
 static u8* D_801BAFD0; // Pointer to texture pattern
@@ -194,18 +197,24 @@ void func_801B1FD8(char* str, s32 y) {
     s32 x;
     u8* chPix;
 
-#ifdef VERSION_PC
-    fputs("func_801B1FD8 not implemented", stderr);
-    return;
-#endif
     y = func_801B1EF4(y);
     x = 0;
     while (*str) {
         if (D_801BAFD0 >= g_Pix[4]) {
             break;
         }
+#ifdef VERSION_PC
+        if ((u8)*str >= 0xC0) {
+            // a UTF-8 literal: the PSX build's strings are Shift-JIS
+            ch16 = PcUtf8ToSjis((const u8**)&str);
+        } else {
+            ch16 = *str++ << 8;
+            ch16 += *str++;
+        }
+#else
         ch16 = *str++ << 8;
         ch16 += *str++;
+#endif
         chPix = (u8*)g_api.func_80106A28(ch16, 3);
         for (i = 0; i < LEN; i++) {
             D_801BAFD0[i] = *chPix++;
@@ -249,10 +258,6 @@ void func_801B2108(const char* str, s32 arg1) {
         var_s6 += 0x20;
         arg1 &= ~0x200;
     }
-#ifdef VERSION_PC
-    // not implemented on PC
-    return;
-#endif
     arg1 = func_801B1EF4(arg1);
     while (*str) {
         var_s2 = 0;
@@ -264,6 +269,19 @@ void func_801B2108(const char* str, s32 arg1) {
         } else if (ch == ' ') {
             ch16 = DOUBLE_SPACE;
             var_s2 = 2;
+#ifdef VERSION_PC
+        } else if (ch >= 0xC0) {
+            // a UTF-8 literal: the PSX build's strings are Shift-JIS
+            str--;
+            ch16 = PcUtf8ToSjis((const u8**)&str);
+            if (ch16 == RIGHT_DOUBLE_QUOTATION_MARK && (u8)*str >= 0xC0) {
+                PcUtf8ToSjis((const u8**)&str); // skips one, as below
+            }
+            if (ch16 == DOUBLE_SPACE) {
+                ch = ' ';
+                var_s2 = 2;
+            }
+#endif
         } else {
             // load ch16 as a big-endian value corresponding with shift-jis
             ch16 = (ch << 8);

@@ -1029,11 +1029,14 @@ static void PollEvents(void) {
                 debug_show_vram ^= 1;
             }
             if (event.key.scancode == SDL_SCANCODE_F5 && !event.key.repeat) {
-                // none, MMPX, xBR, none...
+                // none, MMPX, xBR, CRT, Modern, none...
                 const PsyzFilterMode f = Psyz_VideoGetFilter();
-                Psyz_VideoSetFilter(f == PSYZ_FILTER_NONE   ? PSYZ_FILTER_MMPX
-                                    : f == PSYZ_FILTER_MMPX ? PSYZ_FILTER_XBR
-                                                            : PSYZ_FILTER_NONE);
+                Psyz_VideoSetFilter(
+                    f == PSYZ_FILTER_NONE   ? PSYZ_FILTER_MMPX
+                    : f == PSYZ_FILTER_MMPX ? PSYZ_FILTER_XBR
+                    : f == PSYZ_FILTER_XBR  ? PSYZ_FILTER_CRT
+                    : f == PSYZ_FILTER_CRT  ? PSYZ_FILTER_MODERN
+                                            : PSYZ_FILTER_NONE);
             }
             if (event.key.scancode == SDL_SCANCODE_F4 && !event.key.repeat) {
                 SetFullScreen(!is_fullscreen);

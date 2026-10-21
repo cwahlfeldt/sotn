@@ -74,9 +74,9 @@ static void printHelp(void) {
     printf("  --replay-fast      disable frame limit during replay or demo\n");
     printf("  --window <WxH>     initial window size (e.g. 1920x1080)\n");
     printf("  --fullscreen       start in fullscreen (F4 toggles)\n");
-    printf("  --filter <name>    pixel-art upscaling of the 1x picture: mmpx, "
-           "xbr, or\n"
-           "                     none (default). F5 cycles them\n");
+    printf("  --filter <name>    output filter: mmpx or xbr (pixel-art "
+           "upscaling), crt,\n"
+           "                     modern, or none (default). F5 cycles them\n");
     printf("  --no-crop          keep the black bars above and below the "
            "picture (4:3)\n");
     printf("  --no-interp        on a 120 Hz display, show each game frame "
@@ -95,7 +95,8 @@ static void printAllowedParams(const char* allowedValues[], int n) {
     }
     printf("%s\n", allowedValues[i - 1]);
 }
-// "mmpx", "xbr" or "none" as a PsyzFilterMode, -1 for anything else
+// "mmpx", "xbr", "crt", "modern" or "none" as a PsyzFilterMode, -1 for
+// anything else
 static int ParseFilter(const char* name) {
     if (!name || !strcmp(name, "none")) {
         return PSYZ_FILTER_NONE;
@@ -105,6 +106,12 @@ static int ParseFilter(const char* name) {
     }
     if (!strcmp(name, "xbr")) {
         return PSYZ_FILTER_XBR;
+    }
+    if (!strcmp(name, "crt")) {
+        return PSYZ_FILTER_CRT;
+    }
+    if (!strcmp(name, "modern")) {
+        return PSYZ_FILTER_MODERN;
     }
     return -1;
 }
@@ -208,7 +215,8 @@ static bool parseArgs(
         } else if (strcmp(argv[i], "--filter") == 0 && i + 1 < argc) {
             outParams->filter = ParseFilter(argv[++i]);
             if (outParams->filter < 0) {
-                printf("filter '%s' is not recognized: mmpx, xbr, none\n",
+                printf("filter '%s' is not recognized: mmpx, xbr, crt, "
+                       "modern, none\n",
                        argv[i]);
                 return false;
             }
@@ -234,7 +242,7 @@ int Main(int argc, char* argv[]) {
     Psyz_VideoSetInternalResolution(
         params.filter && !params.scaleSet ? 4 : params.scale);
     if (params.filter && Psyz_VideoSetFilter(params.filter) < 0) {
-        printf("pixel-art filters are not available with this renderer\n");
+        printf("output filters are not available with this renderer\n");
     }
     // on a display at twice the game's rate (120 Hz), draw in-between frames
     // from the primitives DRA tags (RenderTilemap, RenderEntities,

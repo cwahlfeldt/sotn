@@ -105,6 +105,19 @@ typedef enum {
      * only.
      */
     PSYZ_FILTER_XBR,
+    /**
+     * A CRT television: Gaussian scanlines, a little bloom and an aperture
+     * grille at the window's resolution, in one pass straight to the window
+     * size from the 1x picture. Vulkan only for now.
+     */
+    PSYZ_FILTER_CRT,
+    /**
+     * A remastered look that keeps the original pixels: their detail
+     * sharpened, scaled up as crisp, even blocks, with a soft glow around
+     * lights, a little more contrast and colour, and slightly darker corners.
+     * Vulkan only for now.
+     */
+    PSYZ_FILTER_MODERN,
 } PsyzFilterMode;
 
 typedef struct {
@@ -131,7 +144,8 @@ PsyzVsyncMode Psyz_VideoGetVsyncMode(void);
 int Psyz_VideoSetVsyncMode(PsyzVsyncMode mode);
 
 /**
- * @brief Set the output filter (default: NONE); F5 cycles NONE, MMPX, XBR
+ * @brief Set the output filter (default: NONE); F5 cycles NONE, MMPX, XBR,
+ * CRT, MODERN
  *
  * @return 0 on success, -1 if the backend does not support it
  */
